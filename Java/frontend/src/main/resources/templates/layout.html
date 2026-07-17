@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<body>
+
+<!-- ── Shared navigation bar ─────────────────────────────────────── -->
+<nav th:fragment="header" class="navbar navbar-expand-lg navbar-dark" style="background-color:#003B71;">
+  <div class="container-fluid">
+    <a class="navbar-brand fw-bold" href="/">
+      <img src="/favicon.ico" alt="" width="24" height="24"
+           class="d-inline-block align-text-top me-2" onerror="this.style.display='none'"/>
+      Port Ops Demo
+    </a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navMenu">
+      <ul class="navbar-nav me-auto">
+        <li class="nav-item"><a class="nav-link" href="/">Dashboard</a></li>
+        <li class="nav-item"><a class="nav-link" href="/vessels">Vessels</a></li>
+        <li class="nav-item"><a class="nav-link" href="/containers">Containers</a></li>
+        <li class="nav-item"><a class="nav-link" href="/jobs/new">New Job</a></li>
+      </ul>
+      <span class="navbar-text text-white-50 small">
+        frontend &nbsp;|&nbsp; port-ops-demo
+      </span>
+    </div>
+  </div>
+</nav>
+
+<!-- ── Shared footer ─────────────────────────────────────────────── -->
+<footer th:fragment="footer" class="border-top mt-5 py-3 text-center text-muted small">
+  Port Operations Demo &mdash; v0.1.0
+</footer>
+
+</body>
+</html>

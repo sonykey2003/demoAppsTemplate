@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: port-ops-demo
+  labels:
+    app.kubernetes.io/name: port-ops-demo
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/part-of: port-ops-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: frontend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: port-ops-demo
+        app.kubernetes.io/component: frontend
+        app.kubernetes.io/version: "0.1.0"
+        app.kubernetes.io/part-of: port-ops-demo
+    spec:
+      containers:
+        - name: frontend
+          image: localhost/port-ops-demo/frontend:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 9080
+          env:
+            # ── Downstream service URLs ───────────────────────────────────────
+            - name: VESSEL_SERVICE_URL
+              value: "http://vessel-service:9081"
+            - name: CONTAINER_SERVICE_URL
+              value: "http://container-service:9082"
+            - name: OPERATIONS_SERVICE_URL
+              value: "http://operations-service:9083"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "768Mi"
+              cpu: "1"
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 9080
+            periodSeconds: 5
+            failureThreshold: 24
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 9080
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 9080
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 3

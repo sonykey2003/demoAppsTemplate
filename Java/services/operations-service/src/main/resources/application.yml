@@ -1,0 +1,58 @@
+server:
+  port: 9083
+
+spring:
+  application:
+    name: operations-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:opsdb}
+    username: 
+    password: ${DB_PASSWORD:portops_secret}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 4
+          min-idle: 1
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+  metrics:
+    tags:
+      service.name: operations-service
+      service.namespace: port-ops-demo
+      deployment.environment: port-ops-demo
+      service.version: "0.1.0"
+      tenant: port-ops-demo
+
+# Downstream service URLs
+app:
+  services:
+    vessel-service-url: ${VESSEL_SERVICE_URL:http://vessel-service:9081}
+    container-service-url: ${CONTAINER_SERVICE_URL:http://container-service:9082}
+  slow-endpoint:
+    max-delay-ms: 10000
+
+logging:
+  config: classpath:logback-spring.xml

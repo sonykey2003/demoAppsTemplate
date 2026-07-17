@@ -1,0 +1,108 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Port Ops Demo — multipass / k3s overlay
+#
+# Reuses the shared base (Java/k8s/base) and layers on the multi-node behaviour:
+#   • 4 replicas for each application service
+#   • topologySpreadConstraints so those replicas land ONE-PER-VM across the
+#     4-node k3s cluster (even scatter)
+#   • postgres + redis pinned to the k3s server node (stable local-path storage)
+#
+# Deploy with:  kubectl apply -k Java/multipass_k8s/k8s
+# (scripts/deploy.sh wraps this and creates the postgres secret first)
+# ─────────────────────────────────────────────────────────────────────────────
+
+namespace: port-ops-demo
+
+resources:
+  - ../../k8s/base
+
+# One replica per VM. With 4 nodes + maxSkew=1 the scheduler places exactly one
+# pod of each service on each of the 4 multipass VMs.
+replicas:
+  - name: frontend
+    count: 4
+  - name: vessel-service
+    count: 4
+  - name: container-service
+    count: 4
+  - name: operations-service
+    count: 4
+
+patches:
+  # ── Spread each application service evenly across the 4 nodes ───────────────
+  - target:
+      kind: Deployment
+      name: frontend
+    patch: |-
+      - op: add
+        path: /spec/template/spec/topologySpreadConstraints
+        value:
+          - maxSkew: 1
+            topologyKey: kubernetes.io/hostname
+            whenUnsatisfiable: DoNotSchedule
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/component: frontend
+  - target:
+      kind: Deployment
+      name: vessel-service
+    patch: |-
+      - op: add
+        path: /spec/template/spec/topologySpreadConstraints
+        value:
+          - maxSkew: 1
+            topologyKey: kubernetes.io/hostname
+            whenUnsatisfiable: DoNotSchedule
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/component: vessel-service
+  - target:
+      kind: Deployment
+      name: container-service
+    patch: |-
+      - op: add
+        path: /spec/template/spec/topologySpreadConstraints
+        value:
+          - maxSkew: 1
+            topologyKey: kubernetes.io/hostname
+            whenUnsatisfiable: DoNotSchedule
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/component: container-service
+  - target:
+      kind: Deployment
+      name: operations-service
+    patch: |-
+      - op: add
+        path: /spec/template/spec/topologySpreadConstraints
+        value:
+          - maxSkew: 1
+            topologyKey: kubernetes.io/hostname
+            whenUnsatisfiable: DoNotSchedule
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/component: operations-service
+
+  # ── Pin stateful singletons to the k3s server node ─────────────────────────
+  # local-path PVs bind to the node that first mounts them; pinning keeps
+  # postgres data reachable across reschedules. redis is ephemeral but co-located
+  # to keep the shared cache next to the DB.
+  - target:
+      kind: Deployment
+      name: postgres
+    patch: |-
+      - op: add
+        path: /spec/template/spec/nodeSelector
+        value:
+          port-ops/role: server
+  - target:
+      kind: Deployment
+      name: redis
+    patch: |-
+      - op: add
+        path: /spec/template/spec/nodeSelector
+        value:
+          port-ops/role: server

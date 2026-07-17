@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-nodeport
+  namespace: port-ops-demo
+  labels:
+    app.kubernetes.io/name: port-ops-demo
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: port-ops-demo
+  annotations:
+    # Use this service for easy browser access during demo: http://<node-ip>:31080
+spec:
+  selector:
+    app.kubernetes.io/component: frontend
+  ports:
+    - name: http
+      port: 9080
+      targetPort: 9080
+      nodePort: 31080
+  type: NodePort

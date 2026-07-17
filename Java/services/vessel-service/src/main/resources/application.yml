@@ -1,0 +1,40 @@
+server:
+  port: 9081
+
+spring:
+  application:
+    name: vessel-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:vesseldb}
+    username: 
+    password: ${DB_PASSWORD:portops_secret}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+  metrics:
+    tags:
+      service.name: vessel-service
+      service.namespace: port-ops-demo
+      deployment.environment: port-ops-demo
+      service.version: "0.1.0"
+      tenant: port-ops-demo
+
+logging:
+  config: classpath:logback-spring.xml

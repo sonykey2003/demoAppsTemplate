@@ -1,0 +1,38 @@
+server:
+  port: 9080
+
+spring:
+  application:
+    name: frontend
+  thymeleaf:
+    cache: false
+    mode: HTML
+    encoding: UTF-8
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+  metrics:
+    tags:
+      service.name: frontend
+      service.namespace: port-ops-demo
+      deployment.environment: demo
+      service.version: "0.1.0"
+      tenant: port-ops-demo
+
+# Downstream service URLs
+app:
+  services:
+    vessel-service-url: ${VESSEL_SERVICE_URL:http://vessel-service:9081}
+    container-service-url: ${CONTAINER_SERVICE_URL:http://container-service:9082}
+    operations-service-url: ${OPERATIONS_SERVICE_URL:http://operations-service:9083}
+
+logging:
+  config: classpath:logback-spring.xml

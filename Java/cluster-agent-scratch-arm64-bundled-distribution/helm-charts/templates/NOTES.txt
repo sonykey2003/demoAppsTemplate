@@ -1,0 +1,32 @@
+Check HELM release status:
+
+  $ helm status {{ .Release.Name }} -n {{ .Release.Namespace }}
+  $ helm get {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+List operator, cluster agent and machine agent pods:
+
+  $ kubectl get pods -n {{ .Release.Namespace }}
+
+Release state:
+  Install ClusterAgent: {{ .Values.installClusterAgent }}
+  Install InfraViz: {{ .Values.installInfraViz }}
+  Controller URL: {{ .Values.controllerInfo.url }}
+  Auto-Instrumentation enabled: {{ .Values.instrumentationConfig.enabled }}
+  Installing metrics-server: {{ or ( eq ( ( get ( get .Values "metrics-server" ) "enabled" ) | toString ) "true" ) ( eq ( ( get ( get .Values "install" | default dict ) "metrics-server" ) | toString ) "true" ) }}
+{{- $secret := (lookup "v1" "Secret" .Release.Namespace "cluster-agent-secret") }}
+{{- $accessKeyMissing := not .Values.controllerInfo.accessKey }}
+{{- if and (not $secret) $accessKeyMissing }}
+###########################################################################
+#                                                                         #
+#                           IMPORTANT NOTICE                              #
+#                                                                         #
+###########################################################################
+THE `cluster-agent-secret` IS NOT PRESENT IN THE CLUSTER, AND THE `accessKey`
+IS MISSING FROM THE values.yaml FILE.
+
+YOU CAN EITHER:
+1. CREATE THE `cluster-agent-secret` MANUALLY.
+2. PROVIDE THE `accessKey` IN THE values.yaml FILE.
+
+PLEASE ENSURE THAT AT LEAST ONE OF THESE STEPS IS COMPLETED.
+{{- end }}

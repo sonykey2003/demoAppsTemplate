@@ -1,0 +1,11 @@
+{{ if .Values.installClusterAgent -}}
+{{ if .Values.createServiceAccount -}}
+{{ if .Values.targetAllocator.enabled -}}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.targetAllocatorServiceAccount }}
+  namespace: {{ .Release.Namespace }}
+{{ end -}}
+{{ end -}}
+{{ end -}}

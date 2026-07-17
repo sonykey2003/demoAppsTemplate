@@ -1,0 +1,699 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    app.kubernetes.io/part-of: port-ops-demo
+  name: port-ops-demo
+---
+apiVersion: v1
+data:
+  CONTAINER_SERVICE_URL: http://container-service.port-ops-demo.svc.cluster.local:9082
+  DB_HOST: postgres.port-ops-demo.svc.cluster.local
+  DB_PORT: "5432"
+  ENVIRONMENT: port-ops-demo
+  OPERATIONS_SERVICE_URL: http://operations-service.port-ops-demo.svc.cluster.local:9083
+  REDIS_HOST: redis.port-ops-demo.svc.cluster.local
+  REDIS_PORT: "6379"
+  SERVICE_NAMESPACE: port-ops-demo
+  SERVICE_VERSION: 0.1.0
+  TENANT: port-ops-demo
+  VESSEL_SERVICE_URL: http://vessel-service.port-ops-demo.svc.cluster.local:9081
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/part-of: port-ops-demo
+  name: port-ops-app-config
+  namespace: port-ops-demo
+---
+apiVersion: v1
+data:
+  init.sql: |
+    -- =========================================================================
+    -- Port Operations Demo — PostgreSQL initialisation
+    -- Runs automatically on first start via /docker-entrypoint-initdb.d/
+    -- =========================================================================
+
+    -- ── vesseldb ─────────────────────────────────────────────────────────────
+    CREATE DATABASE vesseldb;
+    \c vesseldb;
+
+    CREATE TABLE vessels (
+        code        VARCHAR(10)     PRIMARY KEY,
+        name        VARCHAR(100)    NOT NULL,
+        imo         VARCHAR(12),
+        length_m    NUMERIC(6, 1)   NOT NULL CHECK (length_m > 0),
+        created_at  TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX idx_vessels_created_at ON vessels (created_at DESC);
+
+    -- Seed: 5 vessels
+    INSERT INTO vessels (code, name, imo, length_m) VALUES
+        ('VSL-0001', 'MV PACIFIC PIONEER',  'IMO9811001', 400.0),
+        ('VSL-0002', 'HARBOR HORIZON',         'IMO9811002', 366.0),
+        ('VSL-0003', 'MARINA STAR',         'IMO9811003', 300.0),
+        ('VSL-0004', 'PACIFIC VOYAGER',     'IMO9811004', 350.0),
+        ('VSL-0005', 'ORIENT EXPRESS',      'IMO9811005', 380.0);
+
+    -- ── containerdb ──────────────────────────────────────────────────────────
+    CREATE DATABASE containerdb;
+    \c containerdb;
+
+    CREATE TYPE container_status AS ENUM (
+        'INBOUND', 'IN_YARD', 'LOADING', 'ON_VESSEL', 'GATE_OUT', 'DELIVERED'
+    );
+
+    CREATE TABLE containers (
+        id            VARCHAR(12)      PRIMARY KEY,
+        iso_type      VARCHAR(4)       NOT NULL,
+        weight_kg     INTEGER          NOT NULL CHECK (weight_kg > 0 AND weight_kg <= 30480),
+        status        container_status NOT NULL DEFAULT 'INBOUND',
+        created_at    TIMESTAMPTZ      NOT NULL DEFAULT NOW(),
+        last_moved_at TIMESTAMPTZ
+    );
+
+    CREATE INDEX idx_containers_status  ON containers (status);
+    CREATE INDEX idx_containers_created ON containers (created_at DESC);
+
+    -- Seed: 20 containers
+    -- ISO types: 22G1 (20ft dry), 42G1 (40ft dry), 45R1 (45ft reefer)
+    -- Status mix: INBOUND (12), IN_YARD (6), ON_VESSEL (2)
+    INSERT INTO containers (id, iso_type, weight_kg, status) VALUES
+        ('CONT-0000001', '22G1', 18500, 'IN_YARD'),
+        ('CONT-0000002', '42G1', 27200, 'IN_YARD'),
+        ('CONT-0000003', '45R1', 22000, 'IN_YARD'),
+        ('CONT-0000004', '22G1',  9800, 'IN_YARD'),
+        ('CONT-0000005', '42G1', 24600, 'IN_YARD'),
+        ('CONT-0000006', '45R1', 15300, 'IN_YARD'),
+        ('CONT-0000007', '22G1',  5000, 'INBOUND'),
+        ('CONT-0000008', '42G1', 30000, 'INBOUND'),
+        ('CONT-0000009', '22G1', 12400, 'INBOUND'),
+        ('CONT-0000010', '45R1', 19700, 'INBOUND'),
+        ('CONT-0000011', '22G1',  7600, 'INBOUND'),
+        ('CONT-0000012', '42G1', 28900, 'INBOUND'),
+        ('CONT-0000013', '22G1', 11100, 'INBOUND'),
+        ('CONT-0000014', '45R1', 21500, 'INBOUND'),
+        ('CONT-0000015', '42G1', 16800, 'INBOUND'),
+        ('CONT-0000016', '22G1',  8300, 'INBOUND'),
+        ('CONT-0000017', '42G1', 25400, 'INBOUND'),
+        ('CONT-0000018', '45R1', 13700, 'INBOUND'),
+        ('CONT-0000019', '22G1', 20100, 'ON_VESSEL'),
+        ('CONT-0000020', '42G1', 29800, 'ON_VESSEL');
+
+    -- ── opsdb ─────────────────────────────────────────────────────────────────
+    CREATE DATABASE opsdb;
+    \c opsdb;
+
+    CREATE TYPE operation_type AS ENUM ('YARD_MOVE', 'GATE_IN', 'GATE_OUT', 'BERTH_ALLOC');
+    CREATE TYPE job_status     AS ENUM ('QUEUED', 'IN_PROGRESS', 'COMPLETED', 'FAILED');
+
+    CREATE TABLE jobs (
+        id               UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
+        vessel_code      VARCHAR(10)     NOT NULL,
+        container_id     VARCHAR(12)     NOT NULL,
+        operation_type   operation_type  NOT NULL,
+        terminal_id      VARCHAR(20)     NOT NULL,
+        status           job_status      NOT NULL DEFAULT 'QUEUED',
+        created_at       TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+        started_at       TIMESTAMPTZ,
+        completed_at     TIMESTAMPTZ,
+        duration_seconds NUMERIC(10, 3)
+    );
+
+    CREATE INDEX idx_jobs_status         ON jobs (status);
+    CREATE INDEX idx_jobs_vessel         ON jobs (vessel_code);
+    CREATE INDEX idx_jobs_container      ON jobs (container_id);
+    CREATE INDEX idx_jobs_operation_type ON jobs (operation_type);
+    CREATE INDEX idx_jobs_created        ON jobs (created_at DESC);
+
+    -- No seed jobs; jobs are created at demo runtime via POST /api/jobs
+kind: ConfigMap
+metadata:
+  labels:
+    app.kubernetes.io/part-of: port-ops-demo
+  name: port-ops-postgres-init-sql
+  namespace: port-ops-demo
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/component: container-service
+    app.kubernetes.io/name: port-ops-demo
+    app.kubernetes.io/part-of: port-ops-demo
+  name: container-service
+  namespace: port-ops-demo
+spec:
+  ports:
+  - name: http
+    port: 9082
+    targetPort: 9082
+  selector:
+    app.kubernetes.io/component: container-service
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/name: port-ops-demo
+    app.kubernetes.io/part-of: port-ops-demo
+  name: frontend
+  namespace: port-ops-demo
+spec:
+  ports:
+  - name: http
+    port: 9080
+    targetPort: 9080
+  selector:
+    app.kubernetes.io/component: frontend
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/name: port-ops-demo
+    app.kubernetes.io/part-of: port-ops-demo
+  name: frontend-nodeport
+  namespace: port-ops-demo
+spec:
+  ports:
+  - name: http
+    nodePort: 31080
+    port: 9080
+    targetPort: 9080
+  selector:
+    app.kubernetes.io/component: frontend
+  type: NodePort
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/component: operations-service
+    app.kubernetes.io/name: port-ops-demo
+    app.kubernetes.io/part-of: port-ops-demo
+  name: operations-service
+  namespace: port-ops-demo
+spec:
+  ports:
+  - name: http
+    port: 9083
+    targetPort: 9083
+  selector:
+    app.kubernetes.io/component: operations-service
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/component: vessel-service
+    app.kubernetes.io/name: port-ops-demo
+    app.kubernetes.io/part-of: port-ops-demo
+  name: vessel-service
+  namespace: port-ops-demo
+spec:
+  ports:
+  - name: http
+    port: 9081
+    targetPort: 9081
+  selector:
+    app.kubernetes.io/component: vessel-service
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/component: postgres
+    app.kubernetes.io/name: port-ops-demo
+    app.kubernetes.io/part-of: port-ops-demo
+  name: postgres
+  namespace: port-ops-demo
+spec:
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: 5432
+  selector:
+    app.kubernetes.io/component: postgres
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/component: redis
+    app.kubernetes.io/name: port-ops-demo
+    app.kubernetes.io/part-of: port-ops-demo
+  name: redis
+  namespace: port-ops-demo
+spec:
+  ports:
+  - name: redis
+    port: 6379
+    targetPort: 6379
+  selector:
+    app.kubernetes.io/component: redis
+  type: ClusterIP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  labels:
+    app.kubernetes.io/part-of: port-ops-demo
+  name: port-ops-postgres-pvc
+  namespace: port-ops-demo
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/component: container-service
+    app.kubernetes.io/name: port-ops-demo
+    app.kubernetes.io/part-of: port-ops-demo
+    app.kubernetes.io/version: 0.1.0
+  name: container-service
+  namespace: port-ops-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: container-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: container-service
+        app.kubernetes.io/name: port-ops-demo
+        app.kubernetes.io/part-of: port-ops-demo
+        app.kubernetes.io/version: 0.1.0
+    spec:
+      containers:
+      - env:
+        - name: SPRING_DATASOURCE_URL
+          value: jdbc:postgresql://postgres.port-ops-demo.svc.cluster.local:5432/containerdb
+        - name: SPRING_DATASOURCE_USERNAME
+          valueFrom:
+            secretKeyRef:
+              key: username
+              name: port-ops-postgres
+        - name: SPRING_DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: port-ops-postgres
+        - name: SPRING_DATA_REDIS_HOST
+          value: redis
+        - name: SPRING_DATA_REDIS_PORT
+          value: "6379"
+        image: localhost/port-ops-demo/container-service:0.1.0
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: 9082
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        name: container-service
+        ports:
+        - containerPort: 9082
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /readyz
+            port: 9082
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: "1"
+            memory: 768Mi
+          requests:
+            cpu: 250m
+            memory: 256Mi
+        startupProbe:
+          failureThreshold: 24
+          httpGet:
+            path: /healthz
+            port: 9082
+          periodSeconds: 5
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/name: port-ops-demo
+    app.kubernetes.io/part-of: port-ops-demo
+    app.kubernetes.io/version: 0.1.0
+  name: frontend
+  namespace: port-ops-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: frontend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: frontend
+        app.kubernetes.io/name: port-ops-demo
+        app.kubernetes.io/part-of: port-ops-demo
+        app.kubernetes.io/version: 0.1.0
+    spec:
+      containers:
+      - env:
+        - name: VESSEL_SERVICE_URL
+          value: http://vessel-service:9081
+        - name: CONTAINER_SERVICE_URL
+          value: http://container-service:9082
+        - name: OPERATIONS_SERVICE_URL
+          value: http://operations-service:9083
+        image: localhost/port-ops-demo/frontend:0.1.0
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: 9080
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        name: frontend
+        ports:
+        - containerPort: 9080
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /readyz
+            port: 9080
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: "1"
+            memory: 768Mi
+          requests:
+            cpu: 250m
+            memory: 256Mi
+        startupProbe:
+          failureThreshold: 24
+          httpGet:
+            path: /healthz
+            port: 9080
+          periodSeconds: 5
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/component: operations-service
+    app.kubernetes.io/name: port-ops-demo
+    app.kubernetes.io/part-of: port-ops-demo
+    app.kubernetes.io/version: 0.1.0
+  name: operations-service
+  namespace: port-ops-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: operations-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: operations-service
+        app.kubernetes.io/name: port-ops-demo
+        app.kubernetes.io/part-of: port-ops-demo
+        app.kubernetes.io/version: 0.1.0
+    spec:
+      containers:
+      - env:
+        - name: SPRING_DATASOURCE_URL
+          value: jdbc:postgresql://postgres.port-ops-demo.svc.cluster.local:5432/opsdb
+        - name: SPRING_DATASOURCE_USERNAME
+          valueFrom:
+            secretKeyRef:
+              key: username
+              name: port-ops-postgres
+        - name: SPRING_DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: port-ops-postgres
+        - name: SPRING_DATA_REDIS_HOST
+          value: redis
+        - name: SPRING_DATA_REDIS_PORT
+          value: "6379"
+        - name: VESSEL_SERVICE_URL
+          value: http://vessel-service:9081
+        - name: CONTAINER_SERVICE_URL
+          value: http://container-service:9082
+        image: localhost/port-ops-demo/operations-service:0.1.0
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: 9083
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        name: operations-service
+        ports:
+        - containerPort: 9083
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /readyz
+            port: 9083
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: "1"
+            memory: 768Mi
+          requests:
+            cpu: 250m
+            memory: 256Mi
+        startupProbe:
+          failureThreshold: 24
+          httpGet:
+            path: /healthz
+            port: 9083
+          periodSeconds: 5
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/component: vessel-service
+    app.kubernetes.io/name: port-ops-demo
+    app.kubernetes.io/part-of: port-ops-demo
+    app.kubernetes.io/version: 0.1.0
+  name: vessel-service
+  namespace: port-ops-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: vessel-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: vessel-service
+        app.kubernetes.io/name: port-ops-demo
+        app.kubernetes.io/part-of: port-ops-demo
+        app.kubernetes.io/version: 0.1.0
+    spec:
+      containers:
+      - env:
+        - name: SPRING_DATASOURCE_URL
+          value: jdbc:postgresql://postgres.port-ops-demo.svc.cluster.local:5432/vesseldb
+        - name: SPRING_DATASOURCE_USERNAME
+          valueFrom:
+            secretKeyRef:
+              key: username
+              name: port-ops-postgres
+        - name: SPRING_DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: port-ops-postgres
+        image: localhost/port-ops-demo/vessel-service:0.1.0
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: 9081
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        name: vessel-service
+        ports:
+        - containerPort: 9081
+        readinessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /readyz
+            port: 9081
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: "1"
+            memory: 768Mi
+          requests:
+            cpu: 250m
+            memory: 256Mi
+        startupProbe:
+          failureThreshold: 24
+          httpGet:
+            path: /healthz
+            port: 9081
+          periodSeconds: 5
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/component: postgres
+    app.kubernetes.io/name: port-ops-demo
+    app.kubernetes.io/part-of: port-ops-demo
+    app.kubernetes.io/version: "16"
+  name: postgres
+  namespace: port-ops-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: postgres
+        app.kubernetes.io/name: port-ops-demo
+        app.kubernetes.io/part-of: port-ops-demo
+        app.kubernetes.io/version: "16"
+    spec:
+      containers:
+      - env:
+        - name: POSTGRES_USER
+          valueFrom:
+            secretKeyRef:
+              key: username
+              name: port-ops-postgres
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: password
+              name: port-ops-postgres
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        image: postgres:16
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - $(POSTGRES_USER)
+          initialDelaySeconds: 20
+          periodSeconds: 10
+        name: postgres
+        ports:
+        - containerPort: 5432
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - $(POSTGRES_USER)
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: "1"
+            memory: 768Mi
+          requests:
+            cpu: 250m
+            memory: 256Mi
+        volumeMounts:
+        - mountPath: /var/lib/postgresql/data
+          name: postgres-data
+        - mountPath: /docker-entrypoint-initdb.d
+          name: init-sql
+      securityContext:
+        fsGroup: 999
+      volumes:
+      - name: postgres-data
+        persistentVolumeClaim:
+          claimName: port-ops-postgres-pvc
+      - configMap:
+          name: port-ops-postgres-init-sql
+        name: init-sql
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/component: redis
+    app.kubernetes.io/name: port-ops-demo
+    app.kubernetes.io/part-of: port-ops-demo
+    app.kubernetes.io/version: "7"
+  name: redis
+  namespace: port-ops-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: redis
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: redis
+        app.kubernetes.io/name: port-ops-demo
+        app.kubernetes.io/part-of: port-ops-demo
+        app.kubernetes.io/version: "7"
+    spec:
+      containers:
+      - command:
+        - redis-server
+        - --appendonly
+        - "no"
+        - --save
+        - ""
+        image: redis:7-alpine
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        name: redis
+        ports:
+        - containerPort: 6379
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 64Mi

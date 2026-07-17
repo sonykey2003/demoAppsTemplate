@@ -1,0 +1,31 @@
+/* Port Ops Demo – Primary stylesheet */
+
+:root {
+  --brand-blue: #003B71;
+  --brand-blue-light: #1a5a9a;
+}
+
+body {
+  background-color: #f8f9fa;
+}
+
+/* Primary brand blue card */
+.brand-card-primary {
+  background-color: var(--brand-blue);
+  border-color: var(--brand-blue);
+}
+
+.brand-card-primary:hover {
+  background-color: var(--brand-blue-light);
+}
+
+/* Ensure navbar brand is legible */
+.navbar-brand {
+  font-size: 1.1rem;
+  letter-spacing: 0.02em;
+}
+
+/* Make monospace IDs stand out slightly */
+.font-monospace {
+  font-size: 0.875em;
+}

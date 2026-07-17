@@ -1,0 +1,55 @@
+server:
+  port: 9082
+
+spring:
+  application:
+    name: container-service
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:containerdb}
+    username: 
+    password: ${DB_PASSWORD:portops_secret}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 4
+          min-idle: 1
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+  metrics:
+    tags:
+      service.name: container-service
+      service.namespace: port-ops-demo
+      deployment.environment: port-ops-demo
+      service.version: "0.1.0"
+      tenant: port-ops-demo
+
+# Redis cache TTL for container lookups (seconds)
+app:
+  cache:
+    container-ttl-seconds: 300
+
+logging:
+  config: classpath:logback-spring.xml

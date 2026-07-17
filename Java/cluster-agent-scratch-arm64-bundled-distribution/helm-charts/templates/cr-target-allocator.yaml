@@ -1,0 +1,45 @@
+{{ if .Values.installClusterAgent -}}
+{{ if .Values.targetAllocator.enabled -}}
+{{ $releaseName := .Release.Name}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: appdynamics-target-allocator-{{.Release.Name}}
+rules:
+  - apiGroups:
+    - ""
+    resources:
+    - namespaces
+    - pods
+    - nodes
+    verbs:
+    - get
+    - list
+    - watch
+  - apiGroups:
+      - "apps"
+    resources:
+      - statefulsets
+    verbs:
+      - create
+      - update
+      - delete
+      - get
+      - list
+  - apiGroups:
+      - "apps"
+    resources:
+      - replicasets
+    verbs:
+      - get
+      - list
+  {{ if .Capabilities.APIVersions.Has "apps.openshift.io/v1/DeploymentConfig" -}}
+  - apiGroups:
+      - apps.openshift.io
+    resources:
+      - deploymentconfigs
+    verbs:
+      - get
+  {{- end }}
+{{- end }}
+{{- end }}

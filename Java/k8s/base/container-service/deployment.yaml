@@ -1,0 +1,75 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: container-service
+  namespace: port-ops-demo
+  labels:
+    app.kubernetes.io/name: port-ops-demo
+    app.kubernetes.io/component: container-service
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/part-of: port-ops-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: container-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: port-ops-demo
+        app.kubernetes.io/component: container-service
+        app.kubernetes.io/version: "0.1.0"
+        app.kubernetes.io/part-of: port-ops-demo
+    spec:
+      containers:
+        - name: container-service
+          image: localhost/port-ops-demo/container-service:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 9082
+          env:
+            # ── Database ─────────────────────────────────────────────────────
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://postgres.port-ops-demo.svc.cluster.local:5432/containerdb"
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: port-ops-postgres
+                  key: username
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: port-ops-postgres
+                  key: password
+            # ── Redis ─────────────────────────────────────────────────────────
+            - name: SPRING_DATA_REDIS_HOST
+              value: "redis"
+            - name: SPRING_DATA_REDIS_PORT
+              value: "6379"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "768Mi"
+              cpu: "1"
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 9082
+            periodSeconds: 5
+            failureThreshold: 24
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 9082
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 9082
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 3

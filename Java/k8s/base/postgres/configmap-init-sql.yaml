@@ -1,0 +1,106 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: port-ops-postgres-init-sql
+  namespace: port-ops-demo
+data:
+  init.sql: |
+    -- =========================================================================
+    -- Port Operations Demo — PostgreSQL initialisation
+    -- Runs automatically on first start via /docker-entrypoint-initdb.d/
+    -- =========================================================================
+
+    -- ── vesseldb ─────────────────────────────────────────────────────────────
+    CREATE DATABASE vesseldb;
+    \c vesseldb;
+
+    CREATE TABLE vessels (
+        code        VARCHAR(10)     PRIMARY KEY,
+        name        VARCHAR(100)    NOT NULL,
+        imo         VARCHAR(12),
+        length_m    NUMERIC(6, 1)   NOT NULL CHECK (length_m > 0),
+        created_at  TIMESTAMPTZ     NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX idx_vessels_created_at ON vessels (created_at DESC);
+
+    -- Seed: 5 vessels
+    INSERT INTO vessels (code, name, imo, length_m) VALUES
+        ('VSL-0001', 'MV PACIFIC PIONEER',  'IMO9811001', 400.0),
+        ('VSL-0002', 'HARBOR HORIZON',         'IMO9811002', 366.0),
+        ('VSL-0003', 'MARINA STAR',         'IMO9811003', 300.0),
+        ('VSL-0004', 'PACIFIC VOYAGER',     'IMO9811004', 350.0),
+        ('VSL-0005', 'ORIENT EXPRESS',      'IMO9811005', 380.0);
+
+    -- ── containerdb ──────────────────────────────────────────────────────────
+    CREATE DATABASE containerdb;
+    \c containerdb;
+
+    CREATE TYPE container_status AS ENUM (
+        'INBOUND', 'IN_YARD', 'LOADING', 'ON_VESSEL', 'GATE_OUT', 'DELIVERED'
+    );
+
+    CREATE TABLE containers (
+        id            VARCHAR(12)      PRIMARY KEY,
+        iso_type      VARCHAR(4)       NOT NULL,
+        weight_kg     INTEGER          NOT NULL CHECK (weight_kg > 0 AND weight_kg <= 30480),
+        status        container_status NOT NULL DEFAULT 'INBOUND',
+        created_at    TIMESTAMPTZ      NOT NULL DEFAULT NOW(),
+        last_moved_at TIMESTAMPTZ
+    );
+
+    CREATE INDEX idx_containers_status  ON containers (status);
+    CREATE INDEX idx_containers_created ON containers (created_at DESC);
+
+    -- Seed: 20 containers
+    -- ISO types: 22G1 (20ft dry), 42G1 (40ft dry), 45R1 (45ft reefer)
+    -- Status mix: INBOUND (12), IN_YARD (6), ON_VESSEL (2)
+    INSERT INTO containers (id, iso_type, weight_kg, status) VALUES
+        ('CONT-0000001', '22G1', 18500, 'IN_YARD'),
+        ('CONT-0000002', '42G1', 27200, 'IN_YARD'),
+        ('CONT-0000003', '45R1', 22000, 'IN_YARD'),
+        ('CONT-0000004', '22G1',  9800, 'IN_YARD'),
+        ('CONT-0000005', '42G1', 24600, 'IN_YARD'),
+        ('CONT-0000006', '45R1', 15300, 'IN_YARD'),
+        ('CONT-0000007', '22G1',  5000, 'INBOUND'),
+        ('CONT-0000008', '42G1', 30000, 'INBOUND'),
+        ('CONT-0000009', '22G1', 12400, 'INBOUND'),
+        ('CONT-0000010', '45R1', 19700, 'INBOUND'),
+        ('CONT-0000011', '22G1',  7600, 'INBOUND'),
+        ('CONT-0000012', '42G1', 28900, 'INBOUND'),
+        ('CONT-0000013', '22G1', 11100, 'INBOUND'),
+        ('CONT-0000014', '45R1', 21500, 'INBOUND'),
+        ('CONT-0000015', '42G1', 16800, 'INBOUND'),
+        ('CONT-0000016', '22G1',  8300, 'INBOUND'),
+        ('CONT-0000017', '42G1', 25400, 'INBOUND'),
+        ('CONT-0000018', '45R1', 13700, 'INBOUND'),
+        ('CONT-0000019', '22G1', 20100, 'ON_VESSEL'),
+        ('CONT-0000020', '42G1', 29800, 'ON_VESSEL');
+
+    -- ── opsdb ─────────────────────────────────────────────────────────────────
+    CREATE DATABASE opsdb;
+    \c opsdb;
+
+    CREATE TYPE operation_type AS ENUM ('YARD_MOVE', 'GATE_IN', 'GATE_OUT', 'BERTH_ALLOC');
+    CREATE TYPE job_status     AS ENUM ('QUEUED', 'IN_PROGRESS', 'COMPLETED', 'FAILED');
+
+    CREATE TABLE jobs (
+        id               UUID            PRIMARY KEY DEFAULT gen_random_uuid(),
+        vessel_code      VARCHAR(10)     NOT NULL,
+        container_id     VARCHAR(12)     NOT NULL,
+        operation_type   operation_type  NOT NULL,
+        terminal_id      VARCHAR(20)     NOT NULL,
+        status           job_status      NOT NULL DEFAULT 'QUEUED',
+        created_at       TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+        started_at       TIMESTAMPTZ,
+        completed_at     TIMESTAMPTZ,
+        duration_seconds NUMERIC(10, 3)
+    );
+
+    CREATE INDEX idx_jobs_status         ON jobs (status);
+    CREATE INDEX idx_jobs_vessel         ON jobs (vessel_code);
+    CREATE INDEX idx_jobs_container      ON jobs (container_id);
+    CREATE INDEX idx_jobs_operation_type ON jobs (operation_type);
+    CREATE INDEX idx_jobs_created        ON jobs (created_at DESC);
+
+    -- No seed jobs; jobs are created at demo runtime via POST /api/jobs

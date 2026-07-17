@@ -1,0 +1,11 @@
+{{ if .Values.installInfraViz -}}
+{{ $releaseName := .Release.Name}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: appdynamics-infraviz-{{.Release.Name}}
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+{{- end }}

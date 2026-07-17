@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: operations-service
+  namespace: port-ops-demo
+  labels:
+    app.kubernetes.io/name: port-ops-demo
+    app.kubernetes.io/component: operations-service
+    app.kubernetes.io/version: "0.1.0"
+    app.kubernetes.io/part-of: port-ops-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: operations-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: port-ops-demo
+        app.kubernetes.io/component: operations-service
+        app.kubernetes.io/version: "0.1.0"
+        app.kubernetes.io/part-of: port-ops-demo
+    spec:
+      containers:
+        - name: operations-service
+          image: localhost/port-ops-demo/operations-service:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 9083
+          env:
+            # ── Database ─────────────────────────────────────────────────────
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:postgresql://postgres.port-ops-demo.svc.cluster.local:5432/opsdb"
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: port-ops-postgres
+                  key: username
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: port-ops-postgres
+                  key: password
+            # ── Redis ─────────────────────────────────────────────────────────
+            - name: SPRING_DATA_REDIS_HOST
+              value: "redis"
+            - name: SPRING_DATA_REDIS_PORT
+              value: "6379"
+            # ── Downstream services ──────────────────────────────────────────
+            - name: VESSEL_SERVICE_URL
+              value: "http://vessel-service:9081"
+            - name: CONTAINER_SERVICE_URL
+              value: "http://container-service:9082"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "768Mi"
+              cpu: "1"
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: 9083
+            periodSeconds: 5
+            failureThreshold: 24
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 9083
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 9083
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 3

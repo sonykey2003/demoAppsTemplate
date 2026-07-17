@@ -1,0 +1,64 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# AppDynamics Database Agent (Database Visibility)
+#
+# A standalone agent that registers with the Controller and runs the database
+# "collectors" that monitor PostgreSQL deep metrics (query stats, sessions,
+# wait states, schema health). This is what links the JDBC backends discovered
+# by the Java APM agents to Database Visibility (removes the grey "X" on the
+# database tiers in the flow map).
+#
+# Image note: appdynamics/db-agent is published amd64-only. The agent is a pure
+# Java app and runs fine under emulation on arm64 (Apple Silicon) minikube.
+# ─────────────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: appd-db-agent
+  namespace: appdynamics
+  labels:
+    app.kubernetes.io/name: appd-db-agent
+    app.kubernetes.io/component: database-agent
+    app.kubernetes.io/part-of: appdynamics
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: appd-db-agent
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: appd-db-agent
+        app.kubernetes.io/component: database-agent
+        app.kubernetes.io/part-of: appdynamics
+    spec:
+      containers:
+        - name: db-agent
+          image: docker.io/appdynamics/db-agent:26.4.0-5606
+          imagePullPolicy: IfNotPresent
+          env:
+            # --- Controller connection ---
+            - name: APPDYNAMICS_CONTROLLER_HOST_NAME
+              value: "se-lab.saas.appdynamics.com"
+            - name: APPDYNAMICS_CONTROLLER_PORT
+              value: "443"
+            - name: APPDYNAMICS_CONTROLLER_SSL_ENABLED
+              value: "true"
+            - name: APPDYNAMICS_AGENT_ACCOUNT_NAME
+              value: "se-lab"
+            - name: APPDYNAMICS_AGENT_ACCOUNT_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: appd-dbagent-secret
+                  key: controller-key
+            # --- Agent identity (appears under Databases > Configuration > Agents) ---
+            - name: APPDYNAMICS_DB_AGENT_NAME
+              value: "port-ops-demo-db-agent"
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "300Mi"
+            limits:
+              cpu: "1"
+              memory: "768Mi"
+          # No exec probe: the db-agent image is minimal (no shell) and exposes
+          # no health port. Registration is confirmed via the Controller and logs.

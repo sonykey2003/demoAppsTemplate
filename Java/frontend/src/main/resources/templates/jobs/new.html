@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>New Job – Port Ops</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"/>
+  <link rel="stylesheet" th:href="@{/css/app.css}"/>
+</head>
+<body>
+
+<nav th:replace="~{layout :: header}"></nav>
+
+<div class="container mt-4" style="max-width:640px;">
+  <h2 class="mb-4">Create New Job</h2>
+
+  <!-- Error alert -->
+  <div th:if="${errorMessage}" class="alert alert-danger" role="alert">
+    <strong>Error:</strong> <span th:text="${errorMessage}"></span>
+  </div>
+
+  <form method="post" action="/jobs/new">
+
+    <div class="mb-3">
+      <label for="vesselCode" class="form-label">Vessel</label>
+      <select id="vesselCode" name="vesselCode" class="form-select" required>
+        <option value="">-- Select vessel --</option>
+        <option th:each="v : ${vessels}"
+                th:value="${v.code()}"
+                th:text="${v.code()} + ' – ' + ${v.name()}"
+                th:selected="${v.code() == selectedVessel}"></option>
+      </select>
+    </div>
+
+    <div class="mb-3">
+      <label for="containerId" class="form-label">Container</label>
+      <select id="containerId" name="containerId" class="form-select" required>
+        <option value="">-- Select container --</option>
+        <option th:each="c : ${containers}"
+                th:value="${c.id()}"
+                th:text="${c.id()} + ' (' + ${c.status()} + ')'"
+                th:selected="${c.id() == selectedContainer}"></option>
+      </select>
+    </div>
+
+    <div class="mb-3">
+      <label for="operationType" class="form-label">Operation Type</label>
+      <select id="operationType" name="operationType" class="form-select" required>
+        <option value="">-- Select operation --</option>
+        <option th:each="op : ${operationTypes}"
+                th:value="${op}"
+                th:text="${op}"
+                th:selected="${op == selectedOpType}"></option>
+      </select>
+    </div>
+
+    <div class="mb-3">
+      <label for="terminalId" class="form-label">Terminal ID</label>
+      <input type="text" id="terminalId" name="terminalId" class="form-control"
+             placeholder="e.g. T1" maxlength="20" required
+             th:value="${terminalId}"/>
+    </div>
+
+    <div class="d-flex gap-2">
+      <button type="submit" class="btn btn-primary">Submit Job</button>
+      <a href="/" class="btn btn-outline-secondary">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<footer th:replace="~{layout :: footer}"></footer>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

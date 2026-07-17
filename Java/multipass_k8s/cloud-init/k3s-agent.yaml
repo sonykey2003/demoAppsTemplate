@@ -1,0 +1,20 @@
+#cloud-config
+# ─────────────────────────────────────────────────────────────────────────────
+# k3s AGENT (worker) cloud-init  —  Port Ops Demo multipass path
+#
+# This is a TEMPLATE. scripts/up.sh renders a copy per agent with:
+#   @@K3S_TOKEN@@  → the same pre-shared token the server was launched with
+#   @@K3S_URL@@    → the server VM's IPv4 address (discovered after it boots)
+# ─────────────────────────────────────────────────────────────────────────────
+package_update: true
+packages:
+  - curl
+
+runcmd:
+  # Join this VM to the cluster as an agent (worker) node.
+  - >-
+    curl -sfL https://get.k3s.io |
+    K3S_URL="https://@@K3S_URL@@:6443"
+    K3S_TOKEN="@@K3S_TOKEN@@"
+    INSTALL_K3S_EXEC="agent --node-label port-ops/role=worker"
+    sh -

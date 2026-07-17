@@ -1,0 +1,25 @@
+#cloud-config
+# ─────────────────────────────────────────────────────────────────────────────
+# k3s SERVER (control-plane) cloud-init  —  Port Ops Demo multipass path
+#
+# This is a TEMPLATE. scripts/up.sh renders a copy with the placeholders
+# substituted before passing it to `multipass launch --cloud-init`:
+#   @@K3S_TOKEN@@  → a per-cluster pre-shared join token (generated at launch)
+#
+# The server node is left SCHEDULABLE (k3s default, no control-plane taint) so
+# application pods spread across all 4 VMs, not just the 3 agents.
+# ─────────────────────────────────────────────────────────────────────────────
+package_update: true
+packages:
+  - curl
+
+runcmd:
+  # Install k3s as a server. Traefik is disabled (we expose the UI via NodePort
+  # 31080 like the minikube path). ServiceLB + local-path storage stay enabled.
+  - >-
+    curl -sfL https://get.k3s.io |
+    K3S_TOKEN="@@K3S_TOKEN@@"
+    INSTALL_K3S_EXEC="server --disable traefik --write-kubeconfig-mode 644 --node-label port-ops/role=server"
+    sh -
+  # Block until the API server answers so up.sh can join agents deterministically.
+  - until k3s kubectl get nodes >/dev/null 2>&1; do sleep 3; done

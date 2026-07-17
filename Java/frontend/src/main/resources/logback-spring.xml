@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  CANONICAL LOGBACK TEMPLATE – shared/logback-spring.xml
+  Reference logging configuration
+  This is the reference configuration for ALL Port Ops Demo services.
+  Each service's src/main/resources/logback-spring.xml MUST be a copy of this file.
+
+  Key behaviour:
+  - JSON output to stdout via LogstashEncoder
+  - @timestamp field in ISO-8601 format
+  - severity field (mapped from Logback level)
+  - service, service.namespace, deployment.environment, service.version, tenant as static custom fields
+  - trace_id, span_id, trace_flags pulled from MDC when a Java instrumentation agent is active
+  - terminal_id, vessel_code, container_id, operation_type pulled from MDC when present
+    (application code must call MDC.put() before logging)
+
+  Java instrumentation MDC keys (do NOT rename):
+    trace_id      – hex W3C trace-id (32 chars)
+    span_id       – hex W3C span-id  (16 chars)
+    trace_flags   – "01" when sampled, "00" otherwise
+-->
+<configuration>
+
+  <!-- Bind spring.application.name so the field survives jar packaging -->
+  <springProperty scope="context" name="appName"
+                  source="spring.application.name"
+                  defaultValue="port-ops-service"/>
+
+  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+
+      <!--
+        Static resource attributes describing this service.
+        Keep in sync with the Deployment env vars.
+      -->
+      <customFields>{"service":"${appName}","service.namespace":"port-ops-demo","deployment.environment":"demo","service.version":"0.1.0","tenant":"port-ops-demo"}</customFields>
+
+      <!-- Rename default Logback fields to canonical structured-logging names -->
+      <fieldNames>
+        <timestamp>@timestamp</timestamp>
+        <message>message</message>
+        <logger>logger</logger>
+        <thread>thread</thread>
+        <level>severity</level>
+        <levelValue>[ignore]</levelValue>
+      </fieldNames>
+
+      <!--
+        Explicitly include OTel MDC keys so they appear even when value is empty.
+        LogstashEncoder includes ALL MDC keys by default; listing them here is
+        documentation-as-code for downstream implementers.
+      -->
+      <includeMdcKeyName>trace_id</includeMdcKeyName>
+      <includeMdcKeyName>span_id</includeMdcKeyName>
+      <includeMdcKeyName>trace_flags</includeMdcKeyName>
+
+      <!-- Custom business MDC keys – set by application code -->
+      <includeMdcKeyName>terminal_id</includeMdcKeyName>
+      <includeMdcKeyName>vessel_code</includeMdcKeyName>
+      <includeMdcKeyName>container_id</includeMdcKeyName>
+      <includeMdcKeyName>operation_type</includeMdcKeyName>
+
+    </encoder>
+  </appender>
+
+  <!-- Application package: DEBUG so implementers can trace logic during demo -->
+  <logger name="com.demo.portops" level="DEBUG"/>
+
+  <!-- Reduce framework noise -->
+  <logger name="org.hibernate.SQL"                            level="WARN"/>
+  <logger name="org.hibernate.type.descriptor.sql"           level="WARN"/>
+  <logger name="org.hibernate.orm.deprecation"               level="ERROR"/>
+  <logger name="org.springframework.web.servlet"             level="INFO"/>
+  <logger name="org.springframework.data.redis"              level="WARN"/>
+  <logger name="io.lettuce"                                   level="WARN"/>
+  <logger name="org.apache.http"                             level="WARN"/>
+
+  <root level="INFO">
+    <appender-ref ref="STDOUT"/>
+  </root>
+
+</configuration>

@@ -1,0 +1,42 @@
+apiVersion: cluster.appdynamics.com/v1alpha1
+kind: Clusteragent
+metadata:
+  name: k8s-cluster-agent
+  namespace: appdynamics
+spec:
+  # --- Tier A: cluster monitoring (access key only) ---
+  appName: "minikube-appd-java-demo"
+  controllerUrl: "https://se-lab.saas.appdynamics.com:443"   # SaaS: https://<account>.saas.appdynamics.com:443
+  account: "se-lab"                                          # verify under Settings > License (SaaS global account name)
+  image: "docker.io/appdynamics/cluster-agent:26.4.0-1788"
+  serviceAccountName: appdynamics-cluster-agent
+  nsToMonitorRegex: "appd-java-demo"
+  stdoutLogging: "true"
+
+  # --- Tier B: APM auto-instrumentation (Java) ---
+  # Requires the cluster-agent-secret to ALSO carry api-user=<native-user>@<account>:<password>.
+  # Secure Application rides on this injected Java APM agent; enable it per app in the
+  # Controller's Security module once APM is reporting.
+  instrumentationMethod: Env
+  instrumentationVersion: v2
+  nsToInstrumentRegex: "appd-java-demo"
+  defaultAppName: "AppD-Java-Port-Ops"          # AppD Application; each Deployment = a tier
+  appNameStrategy: manual
+  resourcesToInstrument:
+    - Deployment
+  numberOfTaskWorkers: 2
+  enableInstallationReport: true
+  imageInfo:
+    java:
+      image: "docker.io/appdynamics/java-agent:latest"
+      agentMountPath: /opt/appdynamics
+      imagePullPolicy: IfNotPresent
+  instrumentationRules:
+    - namespaceRegex: "appd-java-demo"
+      language: java
+      matchString: "appd-.*"          # only the 4 Java services; skips postgres/redis
+      instrumentContainer: first
+      imageInfo:
+        image: "docker.io/appdynamics/java-agent:latest"
+        agentMountPath: /opt/appdynamics
+        imagePullPolicy: IfNotPresent

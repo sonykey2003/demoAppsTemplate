@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: operations-service
+  namespace: port-ops-demo
+  labels:
+    app.kubernetes.io/name: port-ops-demo
+    app.kubernetes.io/component: operations-service
+    app.kubernetes.io/part-of: port-ops-demo
+spec:
+  selector:
+    app.kubernetes.io/component: operations-service
+  ports:
+    - name: http
+      port: 9083
+      targetPort: 9083
+  type: ClusterIP

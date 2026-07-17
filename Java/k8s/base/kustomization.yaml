@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: port-ops-demo
+
+resources:
+  # Namespace (must be first)
+  - namespace.yaml
+  # Secrets are created separately so placeholder examples never overwrite real values.
+  # Shared ConfigMap
+  - configmap-app.yaml
+  # Infrastructure
+  - postgres/pvc.yaml
+  - postgres/deployment.yaml
+  - postgres/service.yaml
+  - postgres/configmap-init-sql.yaml
+  - redis/deployment.yaml
+  - redis/service.yaml
+  # Application services
+  - vessel-service/deployment.yaml
+  - vessel-service/service.yaml
+  - container-service/deployment.yaml
+  - container-service/service.yaml
+  - operations-service/deployment.yaml
+  - operations-service/service.yaml
+  - frontend/deployment.yaml
+  - frontend/service.yaml
+  - frontend/frontend-nodeport.yaml

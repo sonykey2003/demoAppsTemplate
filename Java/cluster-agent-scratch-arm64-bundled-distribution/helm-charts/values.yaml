@@ -1,0 +1,195 @@
+installClusterAgent: true
+installInfraViz: false
+installSplunkOtelCollector: false
+
+customKubeconfig:
+  enable: false  # Set to true if using custom kubeconfig
+# Docker images
+imageInfo:
+  agentImage: docker.io/appdynamics/cluster-agent
+  agentTag: 26.4.0-1788
+  operatorImage: docker.io/appdynamics/cluster-agent-operator
+  operatorTag: 26.4.0-1343
+  imagePullPolicy: Always                               # Will be used for operator pod
+  machineAgentImage: docker.io/appdynamics/machine-agent
+  machineAgentTag: latest
+  machineAgentWinImage: docker.io/appdynamics/machine-agent-analytics
+  machineAgentWinTag: win-latest
+  netVizImage: docker.io/appdynamics/machine-agent-netviz
+  netvizTag: latest
+
+# AppDynamics controller info (VALUES TO BE PROVIDED BY THE USER)
+controllerInfo:
+  url: null
+  account: null
+  username: null
+  password: null
+  accessKey: null
+  globalAccount: null            # To be provided when using machineAgent Window Image
+
+  # Cluster Agent SSL properties
+  customSSLCert: null
+  # InfraViz SSL properties
+  keyStorePasswordSecret: ""
+  keyStoreFileSecret: ""
+
+  # Proxy config
+  authenticateProxy: false
+  proxyUrl: null
+  proxyUser: null
+  proxyPassword: null
+
+# RBAC config
+createServiceAccount: true
+agentServiceAccount: appdynamics-cluster-agent
+operatorServiceAccount: appdynamics-operator
+infravizServiceAccount: appdynamics-infraviz
+targetAllocatorServiceAccount: appdynamics-target-allocator
+
+# Cluster agent config
+clusterAgent:
+  clusterMetricsSyncInterval: 60
+  clusterInfoSyncInterval: 180
+  eventDedupeTTLSeconds: 60
+  nodeHistoricalTTLSeconds: 180
+  metadataSyncInterval: 60
+  eventUploadInterval: 10
+  httpClientTimeout: 30
+  podBatchSize: 6
+  instrumentationMaxPollingAttempts: 10
+  instrumentationNsStatusPollingIntervalMinutes: 5
+  imagePullPolicy: ""
+  imagePullSecret: ""
+  memoryThresholdForRestart: 90
+  enableAdditionalMetrics: false
+  enableV2Metrics: false
+  gpuMonitoringEnabled: false
+  tlsCertificateMonitoringEnabled: false
+  containerProperties:
+    containerBatchSize: 5
+    containerParallelRequestLimit: 1
+    containerRegistrationInterval: 120
+  logProperties:
+    logFileSizeMb: 5
+    logFileBackups: 3
+    logLevel: INFO
+  metricProperties:
+    metricsSyncInterval: 30
+    metricUploadRetryCount: 2
+    metricUploadRetryIntervalMilliSeconds: 5
+    podMetricCollectionMaxGoRoutines: 3
+    podMetricCollectionRequestTimeoutSeconds: 5
+    otelMetricBatchSize: 900
+# Profiling specific config - set pprofEnabled true if profiling need to be enabled,
+# provide pprofPort if you need different port else default port 9991 will be assigned
+agentProfiler:
+  pprofEnabled: false
+  pprofPort: 9991
+
+# Pod filter config
+podFilter: {}
+
+# Instrumentation config
+instrumentationConfig:
+  enabled: false
+  containerAppCorrelationMethod: proxy
+  enableAutoInstrumentationTransition: false
+
+targetAllocator:
+  enabled: false
+  clusterAgentReplicas: 3
+  autoScaling:
+    enabled: false
+    replicaProfile: Default
+    podsPercentagePerReplica: 90
+
+# InfraViz config
+infraViz:
+  nodeOS: "linux"
+  enableMasters: false
+  stdoutLogging: false
+  enableContainerHostId: true
+  enableServerViz: false
+  enableDockerViz: false
+  enablePrometheusMonitoring: false
+  prometheusConfig:
+    configMapName: ""
+    exportersConfigMapName: ""
+
+# Netviz config
+netViz:
+  enabled: false
+  netVizPort: 3892
+  resourcesNetViz:
+    limits:
+      cpu: 200m
+      memory: "300Mi"
+    requests:
+      cpu: 100m
+      memory: "150Mi"
+
+# Agent pod specific properties
+agentPod:
+  nodeSelector: {}
+  tolerations: []
+  resources:
+    limits:
+      cpu: "1250m"
+      memory: "300Mi"
+    requests:
+      cpu: "750m"
+      memory: "150Mi"
+  labels: {}
+
+# Target Allocator pod specific properties
+targetAllocatorPod:
+  imagePullPolicy: ""
+  imagePullSecret: ""
+  priorityClassName: ""
+  nodeSelector: {}
+  tolerations: []
+  resources:
+    limits:
+      cpu: "500m"
+      memory: "500Mi"
+    requests:
+      cpu: "200m"
+      memory: "200Mi"
+  labels: {}
+  securityContext: {}
+
+# Operator pod specific properties
+operatorPod:
+  nodeSelector: {}
+  tolerations: []
+  resources:
+    limits:
+      cpu: 200m
+      memory: 128Mi
+    requests:
+      cpu: 100m
+      memory: 64Mi
+  imagePullSecret: ""
+
+# Infraviz pod specific properties
+infravizPod:
+  imagePullSecret: ""
+  nodeSelector:
+    kubernetes.io/os: linux
+  tolerations: []
+  priorityClassName: ""
+  resources:
+    limits:
+      cpu: 500m
+      memory: "1G"
+    requests:
+      cpu: 200m
+      memory: "800M"
+  # overrideVolumeMounts property is valid only after 0.6.10 operator version
+  overrideVolumeMounts: null
+  env: null
+
+# Metrics-Server pod specific properties
+metrics-server:
+  enabled: false
+  nodeSelector: {}

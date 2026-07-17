@@ -1,0 +1,6 @@
+# Rendered cloud-init (contains the live cluster token) and cluster credentials.
+.rendered/
+kubeconfig
+.k3s-token
+.postgres-password
+*.tar

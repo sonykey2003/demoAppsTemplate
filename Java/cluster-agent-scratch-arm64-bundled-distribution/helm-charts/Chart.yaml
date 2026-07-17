@@ -1,0 +1,33 @@
+apiVersion: v2
+name: cluster-agent
+
+description: Sophisticated helm chart to deploy cluster agent and machine agent in addition with advanced features like multiple cluster agent deployments, Granular control over config with intuitive boolean switches
+home: https://appdynamics.com
+icon: https://raw.githubusercontent.com/CiscoDevNet/appdynamics-charts/master/logo.png
+
+version: 1.39.0
+
+appVersion: 26.4.0
+
+dependencies:
+  - name: metrics-server
+    repository: https://kubernetes-sigs.github.io/metrics-server/
+    version: 3.12.1
+    condition: install.metrics-server,metrics-server.enabled
+  - name: splunk-otel-collector
+    repository: https://signalfx.github.io/splunk-otel-collector-chart
+    version: 0.125.0
+    condition: installSplunkOtelCollector
+
+maintainers:
+  - name: AppDynamics
+    email: support@appdynamics.com
+
+keywords:
+  - appdynamics
+  - cluster
+  - kubernetes
+  - openshift
+  - monitoring
+  - pod
+  - deployment
