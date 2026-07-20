@@ -1,0 +1,2 @@
+# Local Splunk config with secrets / secret refs — never commit.
+splunk-integration.env
