@@ -29,14 +29,28 @@ export const telemetry = {
           console.warn('[telemetry] Splunk RUM selected but rumAccessToken is empty — staying off.');
           return;
         }
-        const {SplunkRum} = splunk();
-        await SplunkRum.install({
-          appName: s.applicationName,
-          deploymentEnvironment: s.deploymentEnvironment,
-          endpoint: {rumAccessToken: s.rumAccessToken, realm: s.realm},
-        });
+        const {SplunkRum, OkHttp3AutoModuleConfiguration, HttpURLModuleConfiguration} = splunk();
+        // Android needs the OkHttp module enabled explicitly: RN's fetch runs on OkHttp
+        // and the SDK does NOT turn on HTTP capture by default on Android (iOS uses
+        // URLSession by default). Without this, Android RUM shows no HTTP spans / no APM
+        // correlation. Unlisted modules keep their native defaults (UI/nav/crash/etc).
+        const modules: unknown[] = [];
+        try {
+          if (OkHttp3AutoModuleConfiguration) modules.push(new OkHttp3AutoModuleConfiguration(true));
+          if (HttpURLModuleConfiguration) modules.push(new HttpURLModuleConfiguration(true));
+        } catch (e) {
+          console.warn('[telemetry] could not build network modules:', (e as Error).message);
+        }
+        await SplunkRum.install(
+          {
+            appName: s.applicationName,
+            deploymentEnvironment: s.deploymentEnvironment,
+            endpoint: {rumAccessToken: s.rumAccessToken, realm: s.realm},
+          },
+          modules as never,
+        );
         started = true;
-        console.log(`[telemetry] Splunk RUM initialized (env=${s.deploymentEnvironment})`);
+        console.log(`[telemetry] Splunk RUM initialized (env=${s.deploymentEnvironment}, modules=${modules.length})`);
       } else if (provider === 'appdynamics') {
         const a = config.rum.appdynamics;
         if (!a.appKey) {

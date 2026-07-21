@@ -77,6 +77,34 @@ else
   echo "    • AndroidManifest.xml: permission already present or file missing"
 fi
 
+# 3d. Disable New Architecture — the Splunk RUM Android network (HTTP) instrumentation
+#     does not attach under bridgeless/New Arch, so no HTTP spans / APM correlation.
+GP="${APP_DIR}/android/gradle.properties"
+if [[ -f "${GP}" ]] && grep -q 'newArchEnabled=true' "${GP}"; then
+  perl -0pi -e 's/newArchEnabled=true/newArchEnabled=false/' "${GP}"
+  echo "    ✓ gradle.properties: newArchEnabled=false (for Android HTTP instrumentation)"
+else
+  echo "    • gradle.properties: newArchEnabled already false or file missing"
+fi
+
+# 3e. Splunk OkHttp3 auto network instrumentation (byte-buddy weaving) so RN's fetch
+#     produces HTTP client spans + APM correlation on Android (parity with iOS).
+GS="${APP_DIR}/android/settings.gradle"
+APPBG="${APP_DIR}/android/app/build.gradle"
+if [[ -f "${GS}" ]] && ! grep -q 'splunk-rum-android-releases' "${GS}"; then
+  perl -0pi -e 's!pluginManagement \{ includeBuild\("\.\./node_modules/\@react-native/gradle-plugin"\) \}!pluginManagement {\n  includeBuild("../node_modules/\@react-native/gradle-plugin")\n  repositories {\n    gradlePluginPortal()\n    google()\n    mavenCentral()\n    maven { url "https://splunk.jfrog.io/splunk/splunk-rum-android-releases" }\n  }\n}!' "${GS}"
+  echo "    ✓ settings.gradle: Splunk jFrog pluginManagement repo"
+else
+  echo "    • settings.gradle: Splunk repo already present or file missing"
+fi
+if [[ -f "${APPBG}" ]] && ! grep -q 'rum-okhttp3-auto-plugin' "${APPBG}"; then
+  perl -0pi -e 's!apply plugin: "com\.android\.application"!plugins {\n    id "net.bytebuddy.byte-buddy-gradle-plugin" version "1.18.8" apply false\n    id "com.splunk.rum-okhttp3-auto-plugin" version "2.3.2" apply false\n}\n\napply plugin: "com.android.application"!' "${APPBG}"
+  perl -0pi -e 's!apply plugin: "com\.facebook\.react"!apply plugin: "com.facebook.react"\napply plugin: "net.bytebuddy.byte-buddy-gradle-plugin"\napply plugin: "com.splunk.rum-okhttp3-auto-plugin"!' "${APPBG}"
+  echo "    ✓ app/build.gradle: byte-buddy + Splunk okhttp3 auto plugins"
+else
+  echo "    • app/build.gradle: Splunk okhttp3 plugin already present or file missing"
+fi
+
 if [[ "${RUM_PROVIDER:-}" == "appdynamics" ]]; then
   echo "==> [4/4] Applying AppDynamics build-time instrumentation"
   (cd "${APP_DIR}" && npm run appd:instrument)
